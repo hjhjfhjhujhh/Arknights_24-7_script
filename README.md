@@ -34,7 +34,7 @@
 - 模拟器强烈建议使用**蓝叠**，使用其他模拟器可能会出现问题
 - - *不安装taptap也能使用本软件基础功能。在大版本更新时可能出现问题*
 - - *如果没有安装taptap，请在配置文件内关闭剿灭*
-- [下载压缩包]并解压（最好路径上不要有中文和空格），内容如图：  
+- [下载压缩包](https://github.com/hjhjfhjhujhh/Arknights_24-7_script/releases)并解压（最好路径上不要有中文和空格），内容如图：  
 ![image](https://user-images.githubusercontent.com/89215821/162499773-ac5701b9-94f2-414a-8d53-465f192f1750.png)
 - 从上到下三个文件夹依次为  主程序  MAA程序  ADB工具
 - - *如果MAA版本过低，可以直接替换新的文件夹，名字开头一定要为"MeoAssistantArknights"*
