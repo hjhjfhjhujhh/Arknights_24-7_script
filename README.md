@@ -1,5 +1,5 @@
 # 基于MaaAssistantArknights的明日方舟全天候挂机脚本
-![GitHub](https://img.shields.io/github/license/hjhjfhjhujhh/hjhjfhj-s_test) 
+![GitHub](https://img.shields.io/github/license/hjhjfhjhujhh/Arknights_24-7_script) 
 ![GitHub](https://img.shields.io/badge/platform-Windows-brightgreen)
 ![GitHub](https://img.shields.io/badge/code-Python-blue)
 
