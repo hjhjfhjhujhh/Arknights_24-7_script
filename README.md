@@ -40,6 +40,7 @@
 - - *如果MAA版本过低，可以直接替换新的文件夹，名字开头一定要为"MeoAssistantArknights"*
 - 插上你的手机/模拟器，运行**adbtest.exe**，如果一切正常就会显示"设备已连接"，可以进行下一步
 - - *否则，参照[这个文档](https://github.com/hjhjfhjhujhh/Arknights_24-7_script/blob/main/docs/%E8%AE%BE%E5%A4%87%E8%BF%9E%E6%8E%A5.md)*
+- - 如果你是实体机，请**在开发者选项中启用“直接进入系统”（跳过锁屏界面）！**
 - 打开**配置文件编辑器**，按照提示编辑[配置文件](https://github.com/hjhjfhjhujhh/Arknights_24-7_script/blob/main/docs/%E5%85%B3%E4%BA%8E%E8%AE%BE%E7%BD%AE%E6%96%87%E4%BB%B6.md)，成功后当前目录会出现config.json
 - - *不打开编辑器直接启动程序，会自动生成默认配置文件*
 - 启动**start.bat**
