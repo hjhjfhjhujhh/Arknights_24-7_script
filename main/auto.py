@@ -516,7 +516,7 @@ if __name__ == "__main__":
 
             if ACTTIME != []:
                 natime = findneartime(ACTTIME)  # 设置下一次活动时间
-                logprint("下次活动时间：" + natime, mainlog, fulllog, Print=True)
+                logprint("下次活动时间：" + str(natime), mainlog, fulllog, Print=True)
 
             mainlog = Log(FILEPATH+"\\主日志.log")
             fulllog = Log(FILEPATH+"\\"+timeshort()+".log")
