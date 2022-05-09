@@ -27,7 +27,7 @@ ACTTIME = configs.get("ACTTIME", ["2:00:00", "9:00:00", "17:00:00"])
 """如果为空则单次运行"""
 
 MAXWEEKANNTIMES = configs.get("MAXWEEKANNTIMES", 6)
-"""每周剿灭打满次数 默认为6 如果你没有成年实名的taptap账号请填0"""
+"""每周剿灭打满次数 默认为6"""
 
 SKIPANNINSTART = False
 """在开启软件的本周跳过剿灭"""
@@ -38,13 +38,16 @@ ARKUPGRADE_COORD = configs.get("ARKUPGRADE_COORD", [950, 730])
 PINGWEBSITE = configs.get("PINGWEBSITE", "www.baidu.com")
 """用于ping网络测试的网站"""
 
-DEVICEADDRESS = configs.get("DEVICEADDRESS", "127.0.0.1:5555")
+DEVICEADDRESS = configs.get("DEVICEADDRESS", ["127.0.0.1:5555"])
 """你的设备地址/名称(可选).如果有报错请编辑此处"""
-#EMULATOR = configs.get("EMULATOR", False)
-"""设备是否是模拟器.默认为False"""
+EMULATOR = configs.get("EMULATOR", [False,False])
+"""设备是否是模拟器.[False,False]"""
+COULDPLAY = configs.get("COULDPLAY", [False,True])
+"""日常/剿灭是否使用云玩 默认为[False,True]"""
+
 
 ADBPATH = configs.get("ADBPATH", "")
-"""你的adb.exe路径. 已经设置了系统PATH,可以直接填写"adb".请保持留空以自动配置"""
+"""你的adb.exe路径.请保持留空以自动配置"""
 
 ASSTPATH = configs.get("ASSTPATH", "")
 """自动化脚本的路径. 留空以自动配置"""
@@ -95,11 +98,11 @@ while status <= 10:
             print("正在编辑每周剿灭打满次数")
             print("当前为：{}".format(MAXWEEKANNTIMES))
             print("请输入当前最新剿灭，你的代理记录几次能够打满1800玉，默认为6")
-            print("因为本程序使用taptap云玩打剿灭，如果你没有成年实名的taptap账号请填0，并自行解决每周剿灭")
+            print("手动剿灭请填0")
             print("输入空行跳过并保持当前设置")
             print("输入r返回上一条")
             inp = input(">>>")
-            if inp == "r":
+            if inp == "r": 
                 status -= 1
                 continue
             if inp != "":
@@ -160,8 +163,8 @@ while status <= 10:
             status += 1
 
         elif status == 5:
-            print("正在编辑设备地址/名称，如果只有实体机可以忽略此项")
-            print("如果有多设备，请填写你想连接的设备")
+            print("正在编辑设备地址/名称，如果只有一个实体机可以忽略此项")
+            print("如果有多设备，请先填写用来执行日常任务的设备")
             print("当前为：{}".format(DEVICEADDRESS))
             print("请注意使用英文符号")
             print("输入空行跳过并保持当前设置")
@@ -170,8 +173,40 @@ while status <= 10:
             if inp == "r":
                 status -= 1
                 continue
+            
             if inp != "":
-                DEVICEADDRESS = inp
+                DEVICEADDRESS = []
+                DEVICEADDRESS.append(inp)
+
+            print("是否在此设备使用云玩打日常任务？")
+            print("True或False，默认为False")
+            print("输入空行跳过并保持当前设置")
+            inp = input(">>>")
+            if inp == "True":
+                COULDPLAY[0] = True
+            else:
+                print("已设置为False")
+                COULDPLAY[0] = False
+
+            print("请填写用来执行每周剿灭的设备")
+            print("输入空行与上一项相同")
+            inp = input(">>>")
+            if inp != "":
+                DEVICEADDRESS.append(inp)
+                
+                print("是否在此设备使用云玩打每周剿灭？")
+                print("True或False，默认为False")
+                print("输入空行跳过并保持当前设置")
+                inp = input(">>>")
+                if inp == "True":
+                    COULDPLAY[-1] = True
+                else:
+                    print("已设置为False")
+                    COULDPLAY[-1] = False
+            else:
+                print("在此设备上使用云玩打剿灭已被自动设为"+str(not COULDPLAY[0]))
+                COULDPLAY[-1] = not COULDPLAY[0]
+
             status += 1
 
         elif status == 6:
@@ -195,8 +230,7 @@ while status <= 10:
         elif status == 7:
             print("正在编辑adb路径")
             print("当前为：{}".format(ADBPATH))
-            print("可以指定adb工具的路径，末尾是adb.exe")
-            print("如果你设置了系统PATH，可以直接输入 adb")
+            print("指定adb工具的路径，末尾是adb.exe")
             print("输入空行跳过并保持当前设置")
             print("建议保持留空，由软件自动搜寻上级文件夹")
             print("输入r返回上一条")
@@ -447,8 +481,10 @@ configs["ADBPATH"] = ADBPATH
 configs["ASSTPATH"] = ASSTPATH
 configs["SRC_FILE"] = SRC_FILE
 configs["tasklist"] = tasklist
+configs["COULDPLAY"] = COULDPLAY
 print(configs)
 with open(CONFIGDIR, 'w') as f:
     json.dump(configs, f, sort_keys=True, indent=4, separators=(',', ': '), ensure_ascii=False)
+    #json.dump(configs, f)
 
 input("按回车键退出...")
