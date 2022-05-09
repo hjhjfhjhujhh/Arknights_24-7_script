@@ -55,7 +55,7 @@ ACTTIME = configs.get("ACTTIME", ["2:00:00", "9:00:00", "17:00:00"])
 """每日执行脚本的时间,默认2点、9点、17点"""
 """如果为空则单次运行"""
 MAXWEEKANNTIMES = configs.get("MAXWEEKANNTIMES", 6)
-"""每周剿灭打满次数 默认为6 如果你没有成年实名的taptap账号请填0"""
+"""每周剿灭打满次数 默认为6"""
 SKIPANNINSTART = False
 """在开启软件的当周跳过剿灭"""
 
@@ -65,13 +65,15 @@ ARKUPGRADE_COORD = configs.get("ARKUPGRADE_COORD", [950, 730])
 PINGWEBSITE = configs.get("PINGWEBSITE", "www.baidu.com")
 """用于ping网络测试的网站"""
 
-DEVICEADDRESS = configs.get("DEVICEADDRESS", "127.0.0.1:5555")
+DEVICEADDRESS = configs.get("DEVICEADDRESS", ["127.0.0.1:5555"])
 """你的设备地址/名称(可选).如果有报错请编辑此处"""
-#EMULATOR = configs.get("EMULATOR", False)
-"""设备是否是模拟器.默认为False"""
+EMULATOR = configs.get("EMULATOR", [False,False])
+"""设备是否是模拟器.[False,False]"""
+COULDPLAY = configs.get("COULDPLAY", [False,True])
+"""日常/剿灭是否使用云玩 默认为[False,True]"""
 
 ADBPATH = configs.get("ADBPATH", "")
-"""你的adb.exe路径. 已经设置了系统PATH,可以直接填写"adb".建议保持留空以自动配置"""
+"""你的adb.exe路径.建议保持留空以自动配置"""
 
 ASSTPATH = configs.get("ASSTPATH", "")
 """自动化脚本的路径. 建议保持留空以自动配置"""
@@ -99,6 +101,7 @@ configs["ADBPATH"] = ADBPATH
 configs["ASSTPATH"] = ASSTPATH
 configs["SRC_FILE"] = SRC_FILE
 configs["tasklist"] = tasklist
+configs["COULDPLAY"] = COULDPLAY
 with open(CONFIGDIR, 'w') as f:
     json.dump(configs, f, sort_keys=True, indent=4, separators=(',', ': '), ensure_ascii=False)
 
@@ -228,22 +231,26 @@ def errprint(string, *logs, close=True):
 
 
 class Device:
-    def __init__(self, adbaddress: str, deviceaddress: str, callback=None, emulator=False):
+    def __init__(self, adbaddress: str, deviceaddress: str, info=None, notice=None, err=None, emulator=False):
         """
         params:
             ``deviceaddress``: 设备名称或IP地址
             ``adbaddress``: adb.exe路径
             ``emulator``: 是否是模拟器
-            ``callback``: 回调函数
+            ``infocallback``: 详细日志输出函数
+            ``noticecallback``: 主日志输出函数
+            ``errcallback``: 错误日志输出函数
         """
         self.deviceaddress: str = deviceaddress
         self.adbaddress: str = adbaddress
-        self.callback = callback
+        self.info = info
+        self.notice = notice
+        self.err = err
         self.emulator = emulator
 
     def console(self, command: str):
-        if self.callback:
-            self.callback(self.deviceaddress + " adb: " + command)
+        if self.info:
+            self.info(self.deviceaddress + " adb: " + command)
         return console("{} -s {} {}".format(self.adbaddress, self.deviceaddress, command))
 
     def click(self, x, y, delay=0.5):
@@ -251,7 +258,7 @@ class Device:
         sleep(delay)
 
     def clickText(self, text: str, delay=0.5, strong=False, retry=1):
-        place = OCR_result(callback=self.callback).get(self).find(text, strong=strong, retry=retry)
+        place = OCR_result(self, callback=self.info).get().find(text, strong=strong, retry=retry)
         if place:
             self.console("shell input tap {} {}".format(place[0], place[1]))
             sleep(delay)
@@ -302,10 +309,9 @@ class App:
 
     def open(self, delay=0) -> bool:
         if not self.isinstalled():
-            raise Exception("open(): {}未安装".format(self.packname))
+            self.device.err("open(): {}未安装".format(self.packname))
         if not self.isopen():
-            self.device.console(
-                "shell am start -n {}/{}".format(self.packname, self.openactivity))
+            self.device.console("shell am start -n {}/{}".format(self.packname, self.openactivity))
             sleep(delay)
             return True
         else:
@@ -322,15 +328,151 @@ class App:
             self.device.console("shell am kill {}".format(self.packname))
             sleep(delay)
 
-    def restart(self, delay=10, rest=5):
+    def restart(self, rest=5, delay=10):
+        self.close(rest)
+        return self.open(delay)
+
+
+class Ark(App):
+    def __init__(self,device: Device):
+        """
+        params:
+            ``device``: ADB设备对象
+        """
+        self.packname: str = "com.hypergryph.arknights"
+        self.openactivity: str = "com.u8.sdk.U8UnityContext"
+        self.device: Device = device
+    def login(self):
+        result = OCR_result(self.device, callback=self.device.info)
+        result.get()
+        count = 0
+        while count < 360:
+
+            if result.have("使用日文配音"):  # 选择配音
+                self.device.notice("选择配音...")
+                place = result.find("使用日文配音")
+                device_ord.click(place[0], place[1])
+                self.device.notice("确认选项...")
+                place = result.find("确认")
+                device_ord.click(place[0], place[1])
+
+            elif result.have("确认"):  # 带确认按钮的选项框
+                self.device.notice("确认选项...")
+                place = result.find("确认")
+                device_ord.click(place[0], place[1])
+
+            elif result.have("正在"):  # 等待加载
+                self.device.notice("正在等待...")
+                count += 1
+                sleep(10)
+
+            else:
+                break
+            result.get()  # 判断结束后更新结果 节省算力
+                
+    def upgrade(self):
+        result = OCR_result(self.device, callback=self.device.info)
+        self.device.click(ARKUPGRADE_COORD[0], ARKUPGRADE_COORD[1], delay=10)  # 跳转taptap
+        sleep(60)
+
+        if result.get().have("发现新版本"):  # 关闭taptap升级框
+            self.device.notice("关闭taptap升级框...")
+            self.device.back()
+            sleep(5)
+
+        place = result.get().find("更新")  # taptap更新按钮
+        if place:
+            self.device.notice("taptap更新按钮...")
+            self.device.click(place[0], place[1])
+        else:
+            self.device.err("未找到taptap更新按钮")
+
+        count = 0
+        while count <= 360:
+            if self.device.clickText("继续安装", delay=5):  # 系统安装按钮
+                self.device.notice("系统安装按钮...")
+                break
+            sleep(10)
+            count += 1
+            if count >= 360:
+                self.device.err("更新失败")
+
+        count = 0
+        while count <= 360:
+            if self.device.clickText("打开", delay=10):  # 系统安装完成
+                self.device.notice("安装完成")
+                break
+            if count >= 360:
+                self.device.err("更新失败")
+
+
+class CouldPlay(Ark):
+    def __init__(self, device: Device):
+        """
+        params:
+            ``device``: ADB设备对象
+            ``mainlog``: 主日志对象
+            ``fulllog``: 全日志对象
+        """
+        self.packname: str = "com.taptap"
+        self.openactivity: str = "com.play.taptap.ui.SplashAct"
+        self.device: Device = device
+
+    def open(self, delay=0) -> bool:
+        if not self.isinstalled():
+            self.device.err("open(): {}未安装".format(self.packname))
+        if not self.isopen():
+            self.device.console(
+                "shell am start -n {}/{}".format(self.packname, self.openactivity))
+            sleep(60)
+            result = OCR_result(self.device, callback=self.device.info)
+
+            if result.get().have("发现新版本"):  # 关闭taptap升级框
+                self.device.notice("关闭taptap升级框...")
+                self.device.back()
+                sleep(5)
+
+            count = 0
+            while count <= 100 and (not (self.device.clickText("我的游戏", delay=4) and self.device.clickText("明日方舟", delay=4)
+                                         and self.device.clickText("云玩", delay=2))):
+                sleep(1)
+                count += 1
+
+            if result.get().have("升级客户端"):
+                # vvv不知道会不会有这个错误 先报错 等遇到了再处理
+                self.device.err("升级tap客户端")
+
+            while result.get().have("排队"):
+                self.device.info("云玩排队...")
+                sleep(5)
+
+            sleep(30)
+            if result.get().have("图像"):
+                self.device.err("云玩手动验证")
+
+            sleep(delay)
+            return True
+        else:
+            return False
+
+    def close(self, delay=0):
+        if self.isopen():
+            self.device.back()
+            sleep(1)
+            self.device.clickText("退出云玩", delay=4, strong=True)
+            self.device.console("shell am force-stop {}".format(self.packname))
+            sleep(delay)
+
+    def restart(self, rest=5, delay=10):
         self.close(rest)
         return self.open(delay)
 
 
 class OCR_result:
-    def __init__(self, OCR: list = "", callback=None):
+    def __init__(self, device: Device, OCR: list = "", callback=None):
         self.OCR: list = OCR
         self.callback = callback
+        self.device: Device = device
 
     def find(self, OCR: str, strong=False, retry=0) -> list:
         """
@@ -351,10 +493,11 @@ class OCR_result:
                     if self.callback:
                         self.callback("OCR定位: "+OCR+" >存在:"+str(place))
                     return place
-            if i < retry:
-                self.get(device)
             if self.callback:
                 self.callback("OCR定位: "+OCR+" >不存在")
+            if i < retry:
+                self.get()
+                sleep(1)
         return False
 
     def have(self, OCR: str, strong=False, retry=0) -> bool:
@@ -371,7 +514,7 @@ class OCR_result:
                         self.callback("OCR判断: "+OCR+" >存在")
                     return True
             if i < retry:
-                self.get(device)
+                self.get()
             if self.callback:
                 self.callback("OCR判断: "+OCR+" >不存在")
         return False
@@ -379,15 +522,15 @@ class OCR_result:
     def __str__(self) -> str:
         return str(self.OCR)
 
-    def get(self, device: Device):
+    def get(self):
         """
         获取截图,并进行OCR
         return: OCR结果
         """
         if self.callback:
             self.callback("OCR获取.")
-        device.console("shell screencap -p /sdcard/src.png")
-        device.console("pull /sdcard/src.png {}".format(SRC_FILE))
+        self.device.console("shell screencap -p /sdcard/src.png")
+        self.device.console("pull /sdcard/src.png {}".format(SRC_FILE))
 
         self.OCR = ocr.ocr(SRC_FILE, cls=False)
         return self
@@ -397,13 +540,13 @@ _Message = ""
 """全局变量,用于传递回调消息"""
 
 if __name__ == "__main__":
-    #########################初始化##########################
+    #########################初始化##################################################################################################################################################################################
     if ACTTIME != []:
         natime = findneartime(ACTTIME)
-    """
-    next action time
-    下次活动时间(datetime对象)
-    """
+        """
+        next action time
+        下次活动时间(datetime对象)
+        """
 
     mainlog = Log(FILEPATH+"\\主日志.log")
     """主日志"""
@@ -425,12 +568,13 @@ if __name__ == "__main__":
     if not os.path.exists(ASSTPATH + "\\platform-tools"):
         logprint("MeoAsst路径没有找到platform-tools文件夹，正在复制", Print=True)
         console("xcopy /e /k \"" + upper(ADBPATH)+"\\\" \"" + ASSTPATH + "\\platform-tools\\\"")
-    c = console("{} connect {}".format(ADBPATH, DEVICEADDRESS))
+    c = console("{} connect {}".format(ADBPATH, DEVICEADDRESS[0]))
+    c = console("{} connect {}".format(ADBPATH, DEVICEADDRESS[-1]))
     c = console("{} devices".format(ADBPATH))
-
+    
     if c.count("device") <= 1:
         errprint("ADB连接失败", mainlog, fulllog)
-
+    
     elif c.count("device") >= 3:
         print("\n多个设备已连接:")
         c = c.split("\n")
@@ -447,36 +591,62 @@ if __name__ == "__main__":
                 else:
                     print("实体机")
                 il.append(i)
-        if DEVICEADDRESS in il:
-            print("\n已连接配置文件:", DEVICEADDRESS, end=" ")
-        else:
-            print("输入序号选择设备")
+        if DEVICEADDRESS[0] in il and DEVICEADDRESS[-1] in il:
+            print("\n已连接配置文件:")
+            orddevice=DEVICEADDRESS[0]
+            if "emulator-" in orddevice or "127.0.0.1" in orddevice or "localhost" in orddevice:
+                print(DEVICEADDRESS[0],"模拟器")
+                EMULATOR[0] = True
+            else:
+                print("实体机")
+                EMULATOR[0] = False
+            anndevice=DEVICEADDRESS[-1]
+            if DEVICEADDRESS[0] != DEVICEADDRESS[-1]:
+                if "emulator-" in anndevice or "127.0.0.1" in anndevice or "localhost" in anndevice:
+                    print(DEVICEADDRESS[-1],"模拟器")
+                    EMULATOR[-1] = True
+                else:
+                    print(DEVICEADDRESS[-1],"实体机")
+                    EMULATOR[-1] = False
+        elif DEBUG:
+            print("[debug]输入序号选择设备")
             n = int(input(">>>"))
-            DEVICEADDRESS = il[n-1]
+            orddevice = il[n-1]
+            anndevice = orddevice
             print("已选择设备:", DEVICEADDRESS, end=" ")
+        else:
+            errprint("请在配置文件指定设备", mainlog, fulllog)
+
     else:
         print("\n设备已连接:", end=" ")
-        DEVICEADDRESS = console("{} get-serialno".format(ADBPATH))
-        print("{}".format(DEVICEADDRESS), end=" ")
+        orddevice = console("{} get-serialno".format(ADBPATH))
+        anndevice = orddevice
+        print(orddevice, end=" ")
+        if "emulator-" in orddevice or "127.0.0.1" in orddevice or "localhost" in orddevice:
+            print("模拟器")
+            EMULATOR = [True,True]
+        else:
+            print("实体机")
+            EMULATOR = [False,False]
 
-    if "emulator-" in DEVICEADDRESS or "127.0.0.1" in DEVICEADDRESS or "localhost" in DEVICEADDRESS:
-        print("模拟器")
-        EMULATOR = True
-    else:
-        print("实体机")
-        EMULATOR = False
-
-    if asst.catch_custom(DEVICEADDRESS):
+    if asst.catch_custom(orddevice):
         logprint('设备连接成功:', mainlog, fulllog, Print=True)
     else:
         errprint('设备连接失败', mainlog, fulllog)
+    logprint(orddevice, mainlog, fulllog, Print=True)
+    logprint("（模拟器）" if EMULATOR[0] else "（实体机）", mainlog, fulllog, Print=True)
 
-    device = Device(ADBPATH, DEVICEADDRESS,
-                    callback=lambda x: logprint(x, fulllog), emulator=EMULATOR)
-    ark = App("com.hypergryph.arknights", "com.u8.sdk.U8UnityContext", device)
-    logprint(device.deviceaddress, mainlog, fulllog, Print=True)
-    logprint("（模拟器）" if EMULATOR else "（实体机）", mainlog, fulllog, Print=True)
-    result = OCR_result(callback=lambda x: logprint(x, fulllog))
+
+
+    device_ord = Device(ADBPATH, orddevice, info=lambda x: logprint(x, fulllog), notice=lambda x: logprint(
+        x, fulllog, mainlog), err=lambda x: errprint(x, fulllog, mainlog), emulator=EMULATOR[0])
+    device_ann = Device(ADBPATH, anndevice, info=lambda x: logprint(x, fulllog), notice=lambda x: logprint(
+        x, fulllog, mainlog), err=lambda x: errprint(x, fulllog, mainlog), emulator=EMULATOR[-1])
+    
+    ark = CouldPlay(device_ord) if COULDPLAY[0] else Ark(device_ord)
+    ann = CouldPlay(device_ann) if COULDPLAY[-1] else Ark(device_ann)
+    
+    result = OCR_result(device_ord, callback=lambda x: logprint(x, fulllog))
     WeekAnnTimes = MAXWEEKANNTIMES if SKIPANNINSTART else 0
     """weak Annihilation 每周剿灭完成次数"""
 
@@ -534,44 +704,30 @@ if __name__ == "__main__":
 
                 sleep(5)
             logprint("网络测试通过", mainlog, fulllog)
-
-            if result.get(device).OCR == []:  # 屏幕熄灭
-                logprint("唤醒屏幕...", fulllog)
-                device.power()
             ##############################################################
             ###########################处理剿灭############################
-            if WeekAnnTimes < MAXWEEKANNTIMES:  # 剿灭 <<剿灭没有代理作战的处理
-
+            if WeekAnnTimes < MAXWEEKANNTIMES:  # 剿灭 <<待更新：剿灭没有代理作战的处理
+                if anndevice != orddevice:
+                    logprint("设备切换...", fulllog)
+                    if asst.catch_custom(anndevice):
+                        logprint('设备连接成功:', mainlog, fulllog, Print=True)
+                    else:
+                        errprint('设备连接失败', mainlog, fulllog)
+                    logprint(anndevice, mainlog, fulllog, Print=True)
+                    logprint("（模拟器）" if EMULATOR[-1] else "（实体机）", mainlog, fulllog, Print=True)
+                    result.device=device_ann
+                if result.get().OCR == []:  # 屏幕熄灭
+                    logprint("唤醒屏幕...", fulllog)
+                    device_ann.power()
                 logprint("剿灭开始", mainlog, fulllog)
-                # 使用taptap云玩打剿灭 防止剿灭干扰"上次作战"判定
-                taptap = App(
-                    "com.taptap", "com.play.taptap.ui.SplashAct", device)
-                taptap.restart(delay=60)
 
-                if result.get(device).have("发现新版本"):  # 关闭taptap升级框
-                    logprint("关闭taptap升级框...", mainlog, fulllog)
-                    device.back()
-                    sleep(5)
-
-                count = 0
-                while count <= 100 and (not (device.clickText("我的游戏", delay=4) and device.clickText("明日方舟", delay=4) and device.clickText("云玩", delay=2))):
-                    sleep(1)
-                    count += 1
-
-                if result.get(device).have("升级客户端"):
-                    # vvv不知道会不会有这个错误 先报错 等遇到了再处理
-                    errprint("升级tap客户端", mainlog, fulllog)
-
-                while result.get(device).have("排队"):
-                    logprint("云玩排队...", fulllog)
-                    sleep(5)
-
-                sleep(30)
-                if result.get(device).have("图像"):
-                    errprint("云玩手动验证", mainlog, fulllog)
-                else:
+                if ann.restart(delay=30):
+                    if type(ann) == Ark and result.get().have("已过时"):
+                        ann.upgrade()
+                    ann.login()
                     asst.append_startup()
                     asst.start()
+                    count = 0
                     while count <= 360:
                         count += 1
                         if _Message == "Message.AllTasksCompleted":
@@ -581,8 +737,11 @@ if __name__ == "__main__":
                             errprint("Message捕获失败", mainlog, fulllog)
                         sleep(1)
                     # 等待唤醒 随后进入终端 如果有"关卡已开放" 以及今天不是周日 则跳过
-                    device.clickText("终端", delay=4)
-                    skip = (datetime.datetime.now().weekday() != 6) and result.get(device).have("关卡已开放")
+                    count = 0
+                    while count < 20  and not device_ann.clickText("终端", delay=4):
+                        sleep(10)
+
+                    skip = (datetime.datetime.now().weekday() != 6) and result.get().have("关卡已开放")
                     if skip:
                         logprint("活动已开启 非周日跳过剿灭", mainlog, fulllog)
                     for i in range(0 if skip else MAXWEEKANNTIMES - WeekAnnTimes):
@@ -609,93 +768,44 @@ if __name__ == "__main__":
                         else:
                             WeekAnnTimes += 1
                             logprint("剿灭完成{}次".format(i+1), mainlog, fulllog)
-                device.back()
-                sleep(1)
-                device.clickText("退出云玩", delay=4, strong=True)
-                taptap.close(delay=2)
-                del taptap
+                asst.stop()
+                if anndevice != orddevice:
+                    logprint("设备切换...", fulllog)
+                    if asst.catch_custom(orddevice):
+                        logprint('设备连接成功:', mainlog, fulllog, Print=True)
+                    else:
+                        errprint('设备连接失败', mainlog, fulllog)
+                    logprint(orddevice, mainlog, fulllog, Print=True)
+                    logprint("（模拟器）" if EMULATOR[-1] else "（实体机）", mainlog, fulllog, Print=True)
+                    result.device=device_ord
+                ann.close(delay=2)
+                device_ann.power()
             ##############################################################
+            if result.get().OCR == []:  # 屏幕熄灭
+                logprint("唤醒屏幕...", fulllog)
+                device_ord.power()
             logprint("打开游戏窗口", fulllog)
             if not ark.restart(delay=20):
                 logprint("[debug]窗口已经打开", fulllog)
-            result.get(device)
             ##############################################################
             ########################处理版本更新###########################
-            if result.have("已过时"):  # ark大版本更新
+            if type(ark) == Ark and result.get().have("已过时"):  # ark大版本更新
                 logprint("开始更新...", mainlog, fulllog)
-                device.click(ARKUPGRADE_COORD[0],
-                             ARKUPGRADE_COORD[1], delay=10)  # 跳转taptap
-                result.get(device)
-
-                place = result.find("更新")  # taptap更新按钮
-                if place:
-                    logprint("taptap更新按钮...", mainlog, fulllog)
-                    device.click(place[0], place[1])
-                else:
-                    errprint("未找到taptap更新按钮", mainlog, fulllog)
-
-                count = 0
-                while count <= 360:
-                    if device.clickText("继续安装", delay=5):  # 系统安装按钮
-                        logprint("系统安装按钮...", mainlog, fulllog)
-                        break
-                    sleep(10)
-                    count += 1
-                    if count >= 360:
-                        errprint("更新失败", mainlog, fulllog)
-
-                count = 0
-                while count <= 360:
-                    if device.clickText("打开", delay=10):  # 系统安装完成
-                        logprint("安装完成", mainlog, fulllog)
-                        break
-                    if count >= 360:
-                        errprint("更新失败", mainlog, fulllog)
+                ark.upgrade()
+                sleep(10)
+                result.get()
             ##############################################################
             ########################处理闪断更新###########################
-            count = 0
-            while count < 360:
-
-                if result.have("使用日文配音"):  # 选择配音
-                    logprint("选择配音...", mainlog, fulllog)
-                    place = result.find("使用日文配音")
-                    device.click(place[0], place[1])
-                    logprint("确认选项...", mainlog, fulllog)
-                    place = result.find("确认")
-                    device.click(place[0], place[1])
-
-                elif result.have("确认"):  # 带确认按钮的选项框
-                    logprint("确认选项...", mainlog, fulllog)
-                    place = result.find("确认")
-                    device.click(place[0], place[1])
-
-                elif result.have("正在"):  # 等待加载
-                    logprint("正在等待...", mainlog, fulllog)
-                    count += 1
-                    sleep(10)
-
-                else:
-                    break
-
-                result.get(device)  # 判断结束后更新结果 节省算力
+            ark.login()
             ##############################################################
             #######################ASST主流程#############################
-            count = 0
-            while not result.get(device).have("终端"):  # 持续唤醒直到进入主界面，避免性能太差导致任务链出错
-                device.clickText("开始唤醒", delay=20)  # 解决卡在开始唤醒界面的奇怪bug
-                asst.append_startup()
-                asst.start()
-                while count <= 360:
-                    count += 1
-                    if _Message == "Message.AllTasksCompleted":
-                        _Message = ""
-                        logprint("唤醒...", mainlog, fulllog)
-                        break
-                    if count >= 360:
-                        errprint("唤醒失败", mainlog, fulllog)
-                    sleep(10)
+            while not device_ord.clickText("开始唤醒", delay=10):  # 持续唤醒直到进入主界面，避免性能太差导致任务链出错
+                device_ord.click(100,300)# 解决卡在开始唤醒界面的奇怪bug
+                #device_ord.clickText("开始唤醒", delay=20)  
+                sleep(10)
 
             logprint("任务链开始执行.", mainlog, fulllog)
+            asst.append_startup()
             rogmode = -1
             for t in tasklist:
                 if t[0] == "fight":
@@ -731,9 +841,9 @@ if __name__ == "__main__":
                 asst.append_roguelike(rogmode)
                 asst.start()
 
-            if rogmode == -1 and device.emulator == False:
+            if rogmode == -1 and device_ord.emulator == False:
                 ark.close()
-                device.power()
+                device_ord.power()
 
             elif ACTTIME == []:
                 if rogmode != -1:
