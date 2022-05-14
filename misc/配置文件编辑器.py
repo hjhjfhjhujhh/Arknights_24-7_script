@@ -91,7 +91,8 @@ while status <= 10:
                 if inp == "r":
                     ACTTIME.pop()
                     continue
-                ACTTIME.append(inp)
+                if inp != "":
+                    ACTTIME.append(inp)
             status += 1
 
         elif status == 1:
@@ -232,7 +233,7 @@ while status <= 10:
             print("当前为：{}".format(ADBPATH))
             print("指定adb工具的路径，末尾是adb.exe")
             print("输入空行跳过并保持当前设置")
-            print("建议保持留空，由软件自动搜寻上级文件夹")
+            print("}建议保持留空，由软件自动搜寻上级文件夹")
             print("输入r返回上一条")
             inp = input(">>>")
             if inp == "r":
@@ -247,7 +248,7 @@ while status <= 10:
             print("当前为：{}".format(ASSTPATH))
             print("可以指定自动化脚本文件夹的路径")
             print("输入空行跳过并保持当前设置")
-            print("建议保持留空，由软件自动搜寻上级文件夹")
+            print("}建议保持留空，由软件自动搜寻上级文件夹")
             print("输入r返回上一条")
             inp = input(">>>")
             if inp == "r":
@@ -262,7 +263,7 @@ while status <= 10:
             print("当前为：{}".format(SRC_FILE))
             print("可以指定截屏所在文件夹的路径")
             print("输入空行跳过并保持当前设置")
-            print("除非出现问题,请保持留空以自动配置")
+            print("！除非出现问题,请保持留空以自动配置")
             print("输入r返回上一条")
             inp = input(">>>")
             if inp == "r":
